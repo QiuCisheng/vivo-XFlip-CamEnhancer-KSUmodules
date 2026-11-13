@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#12161c">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<title>相机增强</title>
+<style>
+:root{
+  --bg:#0f1115; --card:#191d24; --card2:#21262f; --line:#2c333e;
+  --fg:#e8ecf1; --dim:#8b95a3; --ok:#34d17a; --bad:#ff5d5d; --warn:#ffb020; --acc:#4c8dff;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;padding:12px;background:var(--bg);color:var(--fg);
+  font:14px/1.5 -apple-system,"Noto Sans SC",system-ui,sans-serif;
+  max-width:520px;margin:0 auto}
+h1{margin:0 0 14px;font-size:17px;font-weight:600;letter-spacing:.3px}
+h1 span{font-size:11px;color:var(--dim);font-weight:400;margin-left:8px}
+
+/* 状态区 */
+.state{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:14px;margin-bottom:16px;display:flex;align-items:center;gap:14px}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--dim);flex:none}
+.dot.ok{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.dot.bad{background:var(--bad);box-shadow:0 0 8px var(--bad)}
+.dot.warn{background:var(--warn);box-shadow:0 0 8px var(--warn)}
+.state .main{flex:1;min-width:0}
+.state .t{font-size:15px;font-weight:600}
+.state .s{font-size:11.5px;color:var(--dim);margin-top:2px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* 按钮 */
+.row{display:flex;gap:10px;margin-bottom:10px}
+button{flex:1;padding:15px 6px;font-size:14px;font-weight:600;
+  color:var(--fg);background:var(--card2);border:1px solid var(--line);
+  border-radius:12px;cursor:pointer;font-family:inherit;transition:.12s;
+  min-height:52px}
+button:active{transform:scale(.97)}
+button.on{background:var(--acc);border-color:var(--acc);color:#fff;
+  box-shadow:0 0 0 3px rgba(76,141,255,.18)}
+button small{white-space:nowrap;display:inline-block}
+button.sm{padding:11px 4px;min-height:42px;font-size:12.5px;font-weight:500;
+  color:var(--dim)}
+
+.hint{margin-top:12px;padding:10px 12px;border-radius:10px;background:#2a2418;
+  border:1px solid #4a3a18;color:#ffcc66;font-size:12px;line-height:1.5;display:none}
+.hint.show{display:block}
+#msg{position:fixed;left:12px;right:12px;bottom:12px;padding:11px 14px;
+  border-radius:10px;background:#2a3140;border:1px solid var(--line);
+  font-size:13px;text-align:center;opacity:0;pointer-events:none;transition:.2s}
+#msg.show{opacity:1}
+</style>
+</head>
+<body>
+
+<h1>相机增强 <span id="tick"></span></h1>
+
+<div class="state">
+  <div class="dot" id="dot"></div>
+  <div class="main">
+    <div class="t" id="t-main">读取中…</div>
+    <div class="s" id="t-sub">—</div>
+  </div>
+</div>
+
+<div class="sect" style="margin:18px 0 8px;font-size:12px;color:#8b95a3">模式</div>
+<div class="row">
+  <button id="b-C"   onclick="setMode('C')">相机增强<br><small style="font-weight:400;opacity:.7;font-size:11px">外屏原生</small></button>
+  <button id="b-A"   onclick="setMode('A')">满血相机<br><small style="font-weight:400;opacity:.7;font-size:11px">内屏版</small></button>
+  <button id="b-OFF" onclick="setMode('OFF')">关闭</button>
+</div>
+
+<div class="sect" style="margin:18px 0 8px;font-size:12px;color:#8b95a3">颠倒世间之物<span style="display:block;font-size:11px;color:#5f6875;margin-top:2px">竖着拿时画面倒置 → 自动翻转 180° · 默认开</span></div>
+<div class="row">
+  <button id="pf-1" onclick="setVideo('pf','1')">开</button>
+  <button id="pf-0" onclick="setVideo('pf','0')">关</button>
+</div>
+
+<div id="vidSec">
+<div class="sect" style="margin:18px 0 8px;font-size:12px;color:#8b95a3">录像规格（改完重启相机生效）</div>
+<div id="vqfps">
+<div class="row">
+  <button id="vq-6" onclick="setVideo('q','6')">1080p</button>
+  <button id="vq-8" onclick="setVideo('q','8')">4K</button>
+</div>
+<div class="row">
+  <button id="vf-30" onclick="setVideo('f','30')">30 帧</button>
+  <button id="vf-60" onclick="setVideo('f','60')">60 帧</button>
+</div>
+</div>
+<div class="sect" style="margin:18px 0 8px;font-size:12px;color:#8b95a3">录像默认镜头（超广角 0.6x）</div>
+<div class="row">
+  <button id="uw-1" onclick="setVideo('uw','1')">开</button>
+  <button id="uw-0" onclick="setVideo('uw','0')">关</button>
+</div>
+<div class="hint show" style="margin-top:10px">4K 会明显发热，长时间录像建议 1080p。<br>⚠️ 4K 与 60 帧不能同时使用（4K60 本机不可行）；1080p 60 帧可用。低电量 / 省电模式下相机自己会降到 24 帧。</div>
+</div>
+
+<div class="row">
+  <button class="sm" onclick="act('reinject')">注入</button>
+  <button class="sm" id="b-dae" onclick="toggleDaemon()">守护</button>
+</div>
+
+<div class="hint" id="hintA">
+  已切到 <b>满血相机</b>：约 3~5 秒自动重建界面。画质 / 帧率 / 超广角由内屏 UI 自己管，<b>夜景 / 5000 万 / 变焦</b> 不可用。
+</div>
+
+<div id="msg"></div>
+
+<script>
+var busy = false;
+var V = {q:'6', f:'30', uw:'1', pf:'1'};
+
+function toast(t){
+  var m = document.getElementById('msg');
+  m.textContent = t; m.classList.add('show');
+  clearTimeout(toast._t);
+  toast._t = setTimeout(function(){ m.classList.remove('show'); }, 2600);
+}
+
+function refresh(){
+  fetch('cgi-bin/status?t=' + Date.now(), {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      var dot = document.getElementById('dot');
+      var main = document.getElementById('t-main');
+      var sub  = document.getElementById('t-sub');
+
+      var modeName = {C:'相机增强', A:'满血相机', OFF:'已关闭'}[d.mode] || d.mode;
+
+      if (d.mode === 'OFF') {
+        dot.className = 'dot';
+        main.textContent = '已关闭';
+        sub.textContent = '相机保持原样（外屏取景镜像）';
+      } else if (!d.cameraPid) {
+        dot.className = 'dot';
+        main.textContent = modeName;
+        sub.textContent = '相机未运行';
+      } else if (d.effective === 'yes' && d.inlive === 'yes') {
+        dot.className = 'dot ok';
+        main.textContent = modeName + ' · 生效中';
+        sub.textContent = '相机 #' + d.cameraPid
+          + '　镜像调用 ' + (d.inprocOut || 0)
+          + (d.daemon === 'running' ? '' : '　⚠ 守护已停');
+      } else {
+        dot.className = 'dot warn';
+        main.textContent = modeName + ' · 注入中';
+        sub.textContent = '相机 #' + d.cameraPid + '，请稍候…';
+      }
+
+      if (d.vq) V.q = d.vq;
+      if (d.vf) V.f = d.vf;
+      if (d.uw) V.uw = d.uw;
+      if (d.pf) V.pf = d.pf;
+      ['vq-6','vq-8'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.q) ? 'on' : ''; });
+      ['vf-30','vf-60'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.f) ? 'on' : ''; });
+      ['uw-1','uw-0'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.uw) ? 'on' : ''; });
+      ['pf-1','pf-0'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.pf) ? 'on' : ''; });
+
+      // 4K 时禁用 60 帧
+      var b60 = document.getElementById('vf-60');
+      if (V.q === '8') { b60.disabled = true; b60.style.opacity = '.35'; b60.style.pointerEvents = 'none'; }
+      else { b60.disabled = false; b60.style.opacity = ''; b60.style.pointerEvents = ''; }
+
+      // 满血相机模式下隐藏录像规格
+      var isA = (d.mode === 'A');
+      document.getElementById('vidSec').style.display = isA ? 'none' : '';
+
+      // 守护按钮状态
+      var bd = document.getElementById('b-dae');
+      bd.dataset.on = (d.daemon === 'running') ? '1' : '0';
+      bd.textContent = (d.daemon === 'running') ? '守护：运行中' : '守护：已停止';
+
+      ['C','A','OFF'].forEach(function(k){
+        document.getElementById('b-' + k).className = (k === d.mode) ? 'on' : '';
+      });
+      document.getElementById('hintA').className = (d.mode === 'A') ? 'hint show' : 'hint';
+      document.getElementById('tick').textContent = new Date().toTimeString().slice(0,8);
+    })
+    .catch(function(){ document.getElementById('tick').textContent = '连接失败'; });
+}
+
+function toggleDaemon(){
+  var b = document.getElementById('b-dae');
+  act(b.dataset.on === '1' ? 'stop' : 'start');
+}
+
+function setVideo(k, v){
+  if (busy) return; busy = true;
+  V[k] = v;
+  if (k === 'q' && v === '8') V.f = '30';   /* 4K 强制 30 帧 */
+  fetch('cgi-bin/ctl?a=video&q=' + V.q + '&f=' + V.f + '&u=' + V.uw + '&pf=' + V.pf, {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ toast(d.msg); refresh(); })
+    .catch(function(){ toast('操作失败'); })
+    .finally(function(){ busy = false; });
+}
+
+function setMode(v){
+  if (busy) return; busy = true;
+  fetch('cgi-bin/ctl?a=setmode&v=' + v, {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ toast(d.msg); refresh(); })
+    .catch(function(){ toast('操作失败'); })
+    .finally(function(){ busy = false; });
+}
+
+function act(a){
+  if (busy) return; busy = true;
+  toast('执行中…');
+  fetch('cgi-bin/ctl?a=' + a, {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ toast(d.msg); refresh(); })
+    .catch(function(){ toast('操作失败'); })
+    .finally(function(){ busy = false; });
+}
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
