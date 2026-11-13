@@ -1,0 +1,60 @@
+#!/system/bin/sh
+# status —— 返回当前状态 JSON
+BASE=/data/local/cammirror
+ISTAT=/data/data/com.android.camera/files/cammirror.json
+
+echo "Content-Type: application/json"
+echo "Cache-Control: no-store"
+echo
+
+MODE=$(cat $BASE/mode 2>/dev/null)
+[ -z "$MODE" ] && MODE=C
+
+DPID=$(cat $BASE/daemon.pid 2>/dev/null)
+if [ -n "$DPID" ] && [ -d /proc/$DPID ]; then
+    DAEMON=running
+else
+    DAEMON=stopped
+    DPID=""
+fi
+
+CAMPID=$(pidof com.android.camera 2>/dev/null | awk '{print $1}')
+
+LIPID=$(sed -n 's/^pid=//p'  $BASE/lastinject 2>/dev/null)
+LITIME=$(sed -n 's/^time=//p' $BASE/lastinject 2>/dev/null)
+LIRC=$(sed -n 's/^rc=//p'   $BASE/lastinject 2>/dev/null)
+
+if [ -n "$CAMPID" ] && [ "$CAMPID" = "$LIPID" ] && [ "$MODE" != "OFF" ]; then
+    EFF=yes
+else
+    EFF=no
+fi
+
+# 进程内状态：优先读相机进程自己写的心跳文件
+IHITS=$(sed -n 's/.*"pmHits":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
+IOUT=$(sed -n 's/.*"outHits":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
+IMODE=$(sed -n 's/.*"mode":"\([A-Z]*\)".*/\1/p' $ISTAT 2>/dev/null)
+IPID=$(sed -n 's/.*"pid":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
+ITICK=$(sed -n 's/.*"ticks":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
+[ -z "$IHITS" ] && IHITS=0
+[ -z "$IOUT" ]  && IOUT=0
+[ -z "$IMODE" ] && IMODE=-
+[ -z "$ITICK" ] && ITICK=0
+
+# 心跳对应的是不是当前相机进程
+if [ -n "$IPID" ] && [ "$IPID" = "$CAMPID" ]; then
+    ILIVE=yes
+else
+    ILIVE=no
+fi
+
+VQ=$(cat /data/local/cammirror/vquality 2>/dev/null); [ -z "$VQ" ] && VQ=6
+VF=$(cat /data/local/cammirror/vfps 2>/dev/null);     [ -z "$VF" ] && VF=30
+UW=$(cat /data/local/cammirror/ultrawide 2>/dev/null); [ -z "$UW" ] && UW=1
+PF=$(cat /data/local/cammirror/portraitfix 2>/dev/null); [ -z "$PF" ] && PF=1
+# 4K 与 60 帧不能共存，4K 时有效帧率固定为 30
+[ "$VQ" = "8" ] && VF=30
+
+printf '{"vq":"%s","vf":"%s","uw":"%s","pf":"%s","mode":"%s","daemon":"%s","daemonPid":"%s","cameraPid":"%s","lastPid":"%s","lastTime":"%s","lastRc":"%s","effective":"%s","inprocHits":"%s","inprocOut":"%s","inprocMode":"%s","inprocPid":"%s","ticks":"%s","inlive":"%s"}\n' \
+  "$VQ" "$VF" "$UW" "$PF" "$MODE" "$DAEMON" "$DPID" "$CAMPID" "$LIPID" "$LITIME" "$LIRC" "$EFF" "$IHITS" "$IOUT" "$IMODE" "$IPID" "$ITICK" "$ILIVE"
+

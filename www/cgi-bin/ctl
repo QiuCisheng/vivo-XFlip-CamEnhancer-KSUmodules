@@ -1,1 +1,81 @@
+#!/system/bin/sh
+# ctl —— 控制接口：setmode / reinject / start / stop / video
+BASE=/data/local/cammirror
 
+echo "Content-Type: application/json"
+echo "Cache-Control: no-store"
+echo
+
+# 按 key 精确取参数（旧写法 's/.*f=\([0-9]*\)...' 是贪婪匹配，
+# 会把 pf=1 里的 f= 抓出来，导致 60 帧永远写不进去）
+qp() {
+  echo "$QUERY_STRING" | tr '&' '\n' | sed -n "s/^$1=//p" | head -n 1
+}
+
+ACT=$(qp a)
+VAL=$(qp v)
+
+case "$ACT" in
+  setmode)
+    case "$VAL" in
+      C|A|OFF)
+        echo "$VAL" > $BASE/mode
+        # 重建统一交给守护进程做，这里只负责把相机拉起来
+        if [ -z "$(pidof com.android.camera)" ]; then
+            am start -n com.android.camera/.CameraActivity > /dev/null 2>&1
+            OUT="已切到 $VAL，相机启动中"
+        else
+            OUT="已切到 $VAL，约 3 秒后生效"
+        fi
+        ;;
+      *) OUT="无效模式" ;;
+    esac
+    ;;
+  reinject)
+    PID=$(pidof com.android.camera 2>/dev/null | awk '{print $1}')
+    if [ -z "$PID" ]; then
+      OUT="相机未运行"
+    else
+      $BASE/bin/frida-inject16 -p $PID -s $BASE/bin/cammirror.js -e >> $BASE/daemon.log 2>&1
+      printf 'pid=%s\nrc=%s\ntime=%s\n' "$PID" "$?" "$(date '+%F %T')" > $BASE/lastinject
+      OUT="已重新注入 pid=$PID"
+    fi
+    ;;
+  start)
+    DPID=$(cat $BASE/daemon.pid 2>/dev/null)
+    if [ -n "$DPID" ] && [ -d /proc/$DPID ]; then
+      OUT="守护进程已在运行"
+    else
+      setsid $BASE/bin/cammirror-watch.sh < /dev/null > /dev/null 2>&1 &
+      OUT="守护进程已启动"
+    fi
+    ;;
+  stop)
+    DPID=$(cat $BASE/daemon.pid 2>/dev/null)
+    if [ -n "$DPID" ]; then
+      kill $DPID 2>/dev/null
+      rm -f $BASE/daemon.pid
+      OUT="守护进程已停止"
+    else
+      OUT="守护进程未运行"
+    fi
+    ;;
+  video)
+    Q=$(qp q)
+    F=$(qp f)
+    U=$(qp u)
+    PF=$(qp pf)
+    case "$F" in 30|60) echo "$F" > $BASE/vfps ;; esac
+    case "$Q" in 6|8) echo "$Q" > $BASE/vquality ;; esac
+    # 4K 强制 30 帧 —— 必须放在写 F 之后，否则会被覆盖回 60
+    if [ "$Q" = "8" ]; then echo 30 > $BASE/vfps; fi
+    case "$U" in 0|1) echo "$U" > $BASE/ultrawide ;; esac
+    case "$PF" in 0|1) echo "$PF" > $BASE/portraitfix ;; esac
+    chmod 644 $BASE/vquality $BASE/vfps $BASE/ultrawide $BASE/portraitfix 2>/dev/null
+    OUT="录像设置已更新，重启相机生效"
+    ;;
+  *)
+    OUT="未知操作" ;;
+esac
+
+printf '{"ok":true,"msg":"%s"}\n' "$OUT"
