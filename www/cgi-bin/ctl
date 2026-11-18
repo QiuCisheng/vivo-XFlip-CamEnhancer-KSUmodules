@@ -74,6 +74,23 @@ case "$ACT" in
     chmod 644 $BASE/vquality $BASE/vfps $BASE/ultrawide $BASE/portraitfix 2>/dev/null
     OUT="录像设置已更新，重启相机生效"
     ;;
+  fakesky)
+    case "$VAL" in
+      0|1)
+        echo "$VAL" > $BASE/fakesky
+        chmod 644 $BASE/fakesky 2>/dev/null
+        if ! pgrep -f "pwrkeyvol-watch[.]sh" > /dev/null 2>&1; then
+          setsid $BASE/bin/pwrkeyvol-watch.sh < /dev/null > /dev/null 2>&1 &
+        fi
+        if [ "$VAL" = "1" ]; then
+          OUT="虚假之天已开启：相机里电源键=音量键"
+        else
+          OUT="虚假之天已关闭：电源键恢复原样"
+        fi
+        ;;
+      *) OUT="无效取值" ;;
+    esac
+    ;;
   *)
     OUT="未知操作" ;;
 esac

@@ -52,9 +52,11 @@ VQ=$(cat /data/local/cammirror/vquality 2>/dev/null); [ -z "$VQ" ] && VQ=6
 VF=$(cat /data/local/cammirror/vfps 2>/dev/null);     [ -z "$VF" ] && VF=30
 UW=$(cat /data/local/cammirror/ultrawide 2>/dev/null); [ -z "$UW" ] && UW=1
 PF=$(cat /data/local/cammirror/portraitfix 2>/dev/null); [ -z "$PF" ] && PF=1
+FK=$(cat /data/local/cammirror/fakesky 2>/dev/null); [ -z "$FK" ] && FK=1
+if pgrep -x pwrkeyvol > /dev/null 2>&1; then PV=yes; else PV=no; fi
 # 4K 与 60 帧不能共存，4K 时有效帧率固定为 30
 [ "$VQ" = "8" ] && VF=30
 
-printf '{"vq":"%s","vf":"%s","uw":"%s","pf":"%s","mode":"%s","daemon":"%s","daemonPid":"%s","cameraPid":"%s","lastPid":"%s","lastTime":"%s","lastRc":"%s","effective":"%s","inprocHits":"%s","inprocOut":"%s","inprocMode":"%s","inprocPid":"%s","ticks":"%s","inlive":"%s"}\n' \
-  "$VQ" "$VF" "$UW" "$PF" "$MODE" "$DAEMON" "$DPID" "$CAMPID" "$LIPID" "$LITIME" "$LIRC" "$EFF" "$IHITS" "$IOUT" "$IMODE" "$IPID" "$ITICK" "$ILIVE"
+printf '{"vq":"%s","vf":"%s","uw":"%s","pf":"%s","mode":"%s","daemon":"%s","daemonPid":"%s","cameraPid":"%s","lastPid":"%s","lastTime":"%s","lastRc":"%s","effective":"%s","inprocHits":"%s","inprocOut":"%s","inprocMode":"%s","inprocPid":"%s","ticks":"%s","inlive":"%s","fk":"%s","pv":"%s"}\n' \
+  "$VQ" "$VF" "$UW" "$PF" "$MODE" "$DAEMON" "$DPID" "$CAMPID" "$LIPID" "$LITIME" "$LIRC" "$EFF" "$IHITS" "$IOUT" "$IMODE" "$IPID" "$ITICK" "$ILIVE" "$FK" "$PV"
 

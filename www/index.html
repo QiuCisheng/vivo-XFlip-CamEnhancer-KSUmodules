@@ -73,6 +73,12 @@ button.sm{padding:11px 4px;min-height:42px;font-size:12.5px;font-weight:500;
   <button id="b-OFF" onclick="setMode('OFF')">关闭</button>
 </div>
 
+<div class="sect" style="margin:18px 0 8px;font-size:12px;color:#8b95a3">虚假之天<span style="display:block;font-size:11px;color:#5f6875;margin-top:2px">相机在前台时电源键 = 音量键 · 退出相机立刻还原 · 默认开</span></div>
+<div class="row">
+  <button id="fk-1" onclick="setFakeSky('1')">开</button>
+  <button id="fk-0" onclick="setFakeSky('0')">关</button>
+</div>
+
 <div class="sect" style="margin:18px 0 8px;font-size:12px;color:#8b95a3">颠倒世间之物<span style="display:block;font-size:11px;color:#5f6875;margin-top:2px">竖着拿时画面倒置 → 自动翻转 180° · 默认开</span></div>
 <div class="row">
   <button id="pf-1" onclick="setVideo('pf','1')">开</button>
@@ -112,7 +118,7 @@ button.sm{padding:11px 4px;min-height:42px;font-size:12.5px;font-weight:500;
 
 <script>
 var busy = false;
-var V = {q:'6', f:'30', uw:'1', pf:'1'};
+var V = {q:'6', f:'30', uw:'1', pf:'1', fk:'1'};
 
 function toast(t){
   var m = document.getElementById('msg');
@@ -155,10 +161,12 @@ function refresh(){
       if (d.vf) V.f = d.vf;
       if (d.uw) V.uw = d.uw;
       if (d.pf) V.pf = d.pf;
+      if (d.fk) V.fk = d.fk;
       ['vq-6','vq-8'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.q) ? 'on' : ''; });
       ['vf-30','vf-60'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.f) ? 'on' : ''; });
       ['uw-1','uw-0'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.uw) ? 'on' : ''; });
       ['pf-1','pf-0'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.pf) ? 'on' : ''; });
+      ['fk-1','fk-0'].forEach(function(id){ document.getElementById(id).className = (id.slice(3) === V.fk) ? 'on' : ''; });
 
       // 4K 时禁用 60 帧
       var b60 = document.getElementById('vf-60');
@@ -186,6 +194,15 @@ function refresh(){
 function toggleDaemon(){
   var b = document.getElementById('b-dae');
   act(b.dataset.on === '1' ? 'stop' : 'start');
+}
+
+function setFakeSky(v){
+  if (busy) return; busy = true;
+  fetch('cgi-bin/ctl?a=fakesky&v=' + v, {cache:'no-store'})
+    .then(function(r){ return r.json(); })
+    .then(function(d){ toast(d.msg); refresh(); })
+    .catch(function(){ toast('操作失败'); })
+    .finally(function(){ busy = false; });
 }
 
 function setVideo(k, v){

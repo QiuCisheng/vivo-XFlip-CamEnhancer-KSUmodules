@@ -10,6 +10,12 @@ if [ "$BASE" != "/data/local/cammirror" ] || [ ${#BASE} -lt 20 ]; then
     exit 0
 fi
 
+# 停「虚假之天」（守护包装 + 本体）。必须最先杀：它独占着电源键设备，
+# 留着会让卸载后的手机电源键一直停在"音量键"状态。
+for p in $(ps -A -o PID,ARGS 2>/dev/null | grep 'pwrkeyvol' | grep -v grep | awk '{print $1}'); do
+    kill $p 2>/dev/null
+done
+
 # 停守护进程
 DPID=$(cat $BASE/daemon.pid 2>/dev/null)
 [ -n "$DPID" ] && kill $DPID 2>/dev/null

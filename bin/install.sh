@@ -7,7 +7,7 @@
 
 MODDIR=/data/adb/modules/cammirror
 BASE=/data/local/cammirror
-PAYLOAD_VER=17      # 每次更新载荷内容都要 +1，否则已装设备不会刷新
+PAYLOAD_VER=21      # 每次更新载荷内容都要 +1，否则已装设备不会刷新
 LOG=$BASE/install.log
 
 # ---------- 安全护栏：路径必须是预期值 ----------
@@ -51,7 +51,8 @@ if [ "$(cat $BASE/.payload_ver 2>/dev/null)" != "$PAYLOAD_VER" ]; then
     cp -rf $MODDIR/www/. $BASE/www/ 2>>$LOG
     chmod 755 $BASE $BASE/bin $BASE/www $BASE/www/cgi-bin 2>/dev/null
     chmod 755 $BASE/bin/frida-inject16 $BASE/bin/cammirror-watch.sh \
-              $BASE/bin/install.sh $BASE/bin/busybox \
+              $BASE/bin/install.sh $BASE/bin/busybox $BASE/bin/pwrkeyvol \
+              $BASE/bin/pwrkeyvol-watch.sh \
               $BASE/www/cgi-bin/status $BASE/www/cgi-bin/ctl 2>/dev/null
     chmod 644 $BASE/bin/cammirror.js $BASE/www/index.html 2>/dev/null
     chmod 755 $BASE/state 2>/dev/null
@@ -85,6 +86,13 @@ chmod 644 $BASE/portraitfix 2>/dev/null
 [ -f $BASE/tune ] || echo 2.2 > $BASE/tune
 chmod 644 $BASE/tune 2>/dev/null
 
+# 虚假之天：相机前台时把电源键变成音量键
+if [ ! -f $BASE/pwrkeyvol.conf ]; then
+    printf 'VOL=down\nPKG=com.android.camera\nPKG=com.vivo.alphacamera\nPKG=net.sourceforge.opencamera\nPKG=com.android.cameraextensions\n' > $BASE/pwrkeyvol.conf
+fi
+[ -f $BASE/fakesky ] || echo 1 > $BASE/fakesky
+chmod 644 $BASE/pwrkeyvol.conf $BASE/fakesky 2>/dev/null
+
 # ---------- 4. 起 httpd（界面的服务端） ----------
 if [ -n "$BB" ]; then
     if ! $BB netstat -ltn 2>/dev/null | grep -q '127.0.0.1:8899'; then
@@ -109,6 +117,19 @@ if [ -z "$DPID" ] || [ ! -d /proc/$DPID ]; then
     fi
 else
     echo "daemon already running pid=$DPID" >> $LOG
+fi
+
+# ---------- 6. 起「虚假之天」（电源键→音量键） ----------
+# 单实例由程序自身的 flock 保护；这里只负责"没在跑就拉起来"
+if [ -x "$BASE/bin/pwrkeyvol-watch.sh" ]; then
+    if ! pgrep -f "pwrkeyvol-watch[.]sh" > /dev/null 2>&1; then
+        setsid $BASE/bin/pwrkeyvol-watch.sh < /dev/null > /dev/null 2>&1 &
+        echo "pwrkeyvol started" >> $LOG
+    else
+        echo "pwrkeyvol already running" >> $LOG
+    fi
+else
+    echo "WARN: pwrkeyvol-watch missing, skip" >> $LOG
 fi
 
 echo "=== install done ===" >> $LOG
