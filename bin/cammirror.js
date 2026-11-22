@@ -18,6 +18,7 @@ var PF_FILE = '/data/local/cammirror/portraitfix';  /* 颠倒世间之物（竖�
 var UW_FILE = '/data/local/cammirror/ultrawide';   /* 超广角：1=开 0=关 */   /* 录像画质档位码，如 8 */   /* 内容: CAM_PACKAGE_DENSITY 的值，如 1.875 */
 
 var RPH = null, NRRB = null, Utils = null, DeviceState = null, SizeUtil = null;
+var SMGR = null, JBool = null, noMirrorHits = 0;
 var IUIController = null, UIVersion = null, DimensUtils = null;
 var JReader = null, JReaderStream = null, JStream = null,
     JFos = null, JString = null;
@@ -141,7 +142,7 @@ function writeStat() {
         var s = JSON.stringify({
             pid: Process.id, mode: current,
             pmHits: hits, outHits: outHits, vfHits: vfHits, last: lastVal,
-            ticks: ticks, sw: swNow, tune: tuneVal, ts: Date.now(),
+            ticks: ticks, sw: swNow, tune: tuneVal, nm: noMirrorHits, ts: Date.now(),
             evt: evt.slice(-8)
         });
         fos = JFos.$new(STAT_FILE);
@@ -154,7 +155,36 @@ function writeStat() {
     }
 }
 
+/* 关闭「镜像保存」：相机读 pref_camera_mirrorstorage_key 时一律返回 Boolean false，
+   自拍 / 外屏拍照存盘不再左右翻转（实测有效，2026-11-22）。 */
+function installNoMirrorSave() {
+    if (!SMGR || !JBool) return;
+    try {
+        SMGR.getSettingValueFromKey.overloads.forEach(function (m) {
+            m.implementation = function (key) {
+                var r = m.apply(this, arguments);
+                try {
+                    if (String(key).toLowerCase().indexOf('mirrorstorage') >= 0) {
+                        noMirrorHits++;
+                        return JBool.$new(false);
+                    }
+                } catch (e) {}
+                return r;
+            };
+        });
+        log('nomirror hook installed');
+    } catch (e) { log('nomirror hook err ' + e); }
+}
+
+function uninstallNoMirrorSave() {
+    if (!SMGR) return;
+    try {
+        SMGR.getSettingValueFromKey.overloads.forEach(function (m) { m.implementation = null; });
+    } catch (e) {}
+}
+
 function uninstallAll() {
+    uninstallNoMirrorSave();
     try { if (RPH) RPH.isPreviewMirror.implementation = null; } catch (e) {}
     try { if (NRRB) NRRB.getPreviewSurfaceOutput.implementation = null; } catch (e) {}
     try { if (Utils) Utils.isFlipOuterScreen.implementation = null; } catch (e) {}
@@ -185,6 +215,7 @@ function installMode(mode) {
             try { return this.create(ctx, a, b, forced); }
             finally { inHook = false; }
         };
+        installNoMirrorSave();
         /* 镜像照样要修 */
         RPH.isPreviewMirror.implementation = function () {
             hits++;
@@ -208,6 +239,7 @@ function installMode(mode) {
            代价：夜景 / 5000万 / 变焦档位仍按外屏限制。 */
         log('mode=A installed (UI=inner, density hook)');
     } else {
+        installNoMirrorSave();
         RPH.isPreviewMirror.implementation = function () {
             hits++;                                  /* 先计数，绝不丢失 */
             var r;
@@ -271,6 +303,8 @@ Java.perform(function () {
         IUIController = Java.use('com.android.camera.ui.api.IUIController');
         UIVersion = Java.use('com.android.camera.constant.ui.UIVersion');
         DimensUtils = Java.use('com.android.camera.res.utils.DimensUtils');
+        try { SMGR = Java.use('com.android.camera.setting.SettingManager'); } catch (e1) {}
+        try { JBool = Java.use('java.lang.Boolean'); } catch (e2) {}
         JReader = Java.use('java.io.BufferedReader');
         JReaderStream = Java.use('java.io.InputStreamReader');
         JStream = Java.use('java.io.FileInputStream');

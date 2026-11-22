@@ -12,7 +12,11 @@ fi
 
 # 停守护进程
 DPID=$(cat $BASE/daemon.pid 2>/dev/null)
-[ -n "$DPID" ] && kill $DPID 2>/dev/null
+# 核对 cmdline 再杀：pid 会被复用，直接 kill 可能杀到无关进程
+if [ -n "$DPID" ] && [ -r "/proc/$DPID/cmdline" ] \
+   && tr '\0' ' ' < "/proc/$DPID/cmdline" 2>/dev/null | grep -q 'cammirror-watch[.]sh'; then
+    kill $DPID 2>/dev/null
+fi
 
 # 停 httpd
 for p in $(ps -A -o PID,ARGS 2>/dev/null | grep 'httpd -p 127.0.0.1:8899' | grep -v grep | awk '{print $1}'); do

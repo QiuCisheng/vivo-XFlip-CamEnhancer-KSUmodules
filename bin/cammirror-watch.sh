@@ -67,5 +67,5 @@ while true; do
     printf 'daemonPid=%s\ncameraPid=%s\nts=%s\n' \
         "$$" "$PID" "$(date '+%F %T')" > $BASE/daemon.state
 
-    sleep 0.2
+    sleep 0.5
 done
