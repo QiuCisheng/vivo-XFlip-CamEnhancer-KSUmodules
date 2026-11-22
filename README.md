@@ -2,7 +2,7 @@
 
 vivo X Flip 外屏原生相机的增强模块（KernelSU）。
 
-- **取景镜像修正** —— 外屏拍照取景不再左右翻转（只改预览，不动成片）
+- **镜像修正** —— 外屏拍照取景不翻转，**成片也不再翻转**（自拍镜像开关被强制关闭）
 - **满血相机** —— 外屏跑内屏版相机界面
 - **录像规格** —— 1080p / 4K 可选，1080p 支持 60 帧；默认 0.6x 超广角
 - **颠倒世间之物** —— 竖着拿时相机界面倒置，自动翻转 180°
@@ -173,3 +173,16 @@ rm -rf /data/adb/modules/cammirror
 - 「虚假之天」只能走 root 层拦截：`keylayout` 是开机时读一次的，改它做不到"按 App 切换"，
   而且会让电源键的锁屏 / 关机功能永久消失。
 - 判前台不要只看 `oom_score_adj`：vivo 相机退出后该值仍为 0（见 v5preview01）。
+
+## 更新日志
+
+### v5-preview-02
+
+### 成片镜像修正
+
+相机设置项 `pref_camera_mirrorstorage_key`（自拍镜像 / 自拍翻转）出厂默认是「自拍镜像」，
+此时自拍或外屏拍照存盘会左右翻转。模块注入后会 hook
+`com.android.camera.setting.SettingManager.getSettingValueFromKey`，凡是 key 含 `mirror`
+的一律返回 `Boolean false`，等于永久按在「自拍翻转」上，清相机数据 / 重刷模块都不会失效。
+
+状态接口里的 `nm` 计数即该 hook 的拦截次数。

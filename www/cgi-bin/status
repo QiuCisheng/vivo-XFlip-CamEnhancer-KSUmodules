@@ -3,6 +3,12 @@
 BASE=/data/local/cammirror
 ISTAT=/data/data/com.android.camera/files/cammirror.json
 
+# 判断 pid 是否"还是我们那个进程"（重启后 pid 会被复用）
+alive_as() {   # alive_as <pid> <cmdline 子串(正则)>
+    [ -n "$1" ] && [ -r "/proc/$1/cmdline" ] || return 1
+    tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null | grep -q "$2"
+}
+
 echo "Content-Type: application/json"
 echo "Cache-Control: no-store"
 echo
@@ -11,7 +17,7 @@ MODE=$(cat $BASE/mode 2>/dev/null)
 [ -z "$MODE" ] && MODE=C
 
 DPID=$(cat $BASE/daemon.pid 2>/dev/null)
-if [ -n "$DPID" ] && [ -d /proc/$DPID ]; then
+if alive_as "$DPID" 'cammirror-watch[.]sh'; then
     DAEMON=running
 else
     DAEMON=stopped
@@ -36,10 +42,12 @@ IOUT=$(sed -n 's/.*"outHits":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
 IMODE=$(sed -n 's/.*"mode":"\([A-Z]*\)".*/\1/p' $ISTAT 2>/dev/null)
 IPID=$(sed -n 's/.*"pid":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
 ITICK=$(sed -n 's/.*"ticks":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
+INM=$(sed -n 's/.*"nm":\([0-9]*\).*/\1/p' $ISTAT 2>/dev/null)
 [ -z "$IHITS" ] && IHITS=0
 [ -z "$IOUT" ]  && IOUT=0
 [ -z "$IMODE" ] && IMODE=-
 [ -z "$ITICK" ] && ITICK=0
+[ -z "$INM" ]   && INM=0
 
 # 心跳对应的是不是当前相机进程
 if [ -n "$IPID" ] && [ "$IPID" = "$CAMPID" ]; then
@@ -57,6 +65,6 @@ if pgrep -x pwrkeyvol > /dev/null 2>&1; then PV=yes; else PV=no; fi
 # 4K 与 60 帧不能共存，4K 时有效帧率固定为 30
 [ "$VQ" = "8" ] && VF=30
 
-printf '{"vq":"%s","vf":"%s","uw":"%s","pf":"%s","mode":"%s","daemon":"%s","daemonPid":"%s","cameraPid":"%s","lastPid":"%s","lastTime":"%s","lastRc":"%s","effective":"%s","inprocHits":"%s","inprocOut":"%s","inprocMode":"%s","inprocPid":"%s","ticks":"%s","inlive":"%s","fk":"%s","pv":"%s"}\n' \
-  "$VQ" "$VF" "$UW" "$PF" "$MODE" "$DAEMON" "$DPID" "$CAMPID" "$LIPID" "$LITIME" "$LIRC" "$EFF" "$IHITS" "$IOUT" "$IMODE" "$IPID" "$ITICK" "$ILIVE" "$FK" "$PV"
+printf '{"vq":"%s","vf":"%s","uw":"%s","pf":"%s","mode":"%s","daemon":"%s","daemonPid":"%s","cameraPid":"%s","lastPid":"%s","lastTime":"%s","lastRc":"%s","effective":"%s","inprocHits":"%s","inprocOut":"%s","inprocMode":"%s","inprocPid":"%s","ticks":"%s","inlive":"%s","nm":"%s","fk":"%s","pv":"%s"}\n' \
+  "$VQ" "$VF" "$UW" "$PF" "$MODE" "$DAEMON" "$DPID" "$CAMPID" "$LIPID" "$LITIME" "$LIRC" "$EFF" "$IHITS" "$IOUT" "$IMODE" "$IPID" "$ITICK" "$ILIVE" "$INM" "$FK" "$PV"
 

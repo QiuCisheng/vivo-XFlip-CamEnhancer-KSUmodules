@@ -2,6 +2,12 @@
 # ctl —— 控制接口：setmode / reinject / start / stop / video
 BASE=/data/local/cammirror
 
+# 判断 pid 是否"还是我们那个进程"（重启后 pid 会被复用）
+alive_as() {   # alive_as <pid> <cmdline 子串(正则)>
+    [ -n "$1" ] && [ -r "/proc/$1/cmdline" ] || return 1
+    tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null | grep -q "$2"
+}
+
 echo "Content-Type: application/json"
 echo "Cache-Control: no-store"
 echo
@@ -43,21 +49,24 @@ case "$ACT" in
     ;;
   start)
     DPID=$(cat $BASE/daemon.pid 2>/dev/null)
-    if [ -n "$DPID" ] && [ -d /proc/$DPID ]; then
-      OUT="守护进程已在运行"
+    if alive_as "$DPID" 'cammirror-watch[.]sh'; then
+      OUT="守护进程已在运行 pid=$DPID"
     else
+      rm -f $BASE/daemon.pid
       setsid $BASE/bin/cammirror-watch.sh < /dev/null > /dev/null 2>&1 &
       OUT="守护进程已启动"
     fi
     ;;
   stop)
     DPID=$(cat $BASE/daemon.pid 2>/dev/null)
-    if [ -n "$DPID" ]; then
+    # 必须核对身份：daemon.pid 陈旧时直接 kill 会杀掉无关进程
+    if alive_as "$DPID" 'cammirror-watch[.]sh'; then
       kill $DPID 2>/dev/null
       rm -f $BASE/daemon.pid
-      OUT="守护进程已停止"
+      OUT="守护进程已停止 pid=$DPID"
     else
-      OUT="守护进程未运行"
+      rm -f $BASE/daemon.pid
+      OUT="守护进程未运行（已清理陈旧 pid 文件）"
     fi
     ;;
   video)

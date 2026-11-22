@@ -7,7 +7,7 @@
 
 MODDIR=/data/adb/modules/cammirror
 BASE=/data/local/cammirror
-PAYLOAD_VER=21      # 每次更新载荷内容都要 +1，否则已装设备不会刷新
+PAYLOAD_VER=27      # 每次更新载荷内容都要 +1，否则已装设备不会刷新
 LOG=$BASE/install.log
 
 # ---------- 安全护栏：路径必须是预期值 ----------
@@ -16,11 +16,19 @@ if [ "$MODDIR" != "/data/adb/modules/cammirror" ] || [ "$BASE" != "/data/local/c
     exit 0
 fi
 
+# 判断 pid 是否"还是我们那个进程"：重启后 pid 会被复用，
+# 只看 /proc/<pid> 存在会把别人的进程当成自己的。
+alive_as() {   # alive_as <pid> <cmdline 子串(正则)>
+    [ -n "$1" ] && [ -r "/proc/$1/cmdline" ] || return 1
+    tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null | grep -q "$2"
+}
+
 # ---------- 并发锁（带陈旧检测，不会被死锁卡住） ----------
 LOCK=$BASE/.lock
 if [ -d "$LOCK" ]; then
     LPID=$(cat $LOCK/pid 2>/dev/null)
-    if [ -n "$LPID" ] && [ -d /proc/$LPID ]; then
+    # 注意：这里也必须核对 cmdline，否则重启后 pid 复用会让安装永远被"锁住"
+    if alive_as "$LPID" 'cammirror/bin/install[.]sh'; then
         exit 0
     fi
     rm -rf "$LOCK" 2>/dev/null
@@ -95,20 +103,31 @@ chmod 644 $BASE/pwrkeyvol.conf $BASE/fakesky 2>/dev/null
 
 # ---------- 4. 起 httpd（界面的服务端） ----------
 if [ -n "$BB" ]; then
-    if ! $BB netstat -ltn 2>/dev/null | grep -q '127.0.0.1:8899'; then
+    # 端口在监听还不够：可能是不属于本载荷的旧 httpd，仍在服务旧页面
+    HPID=$($BB netstat -ltnp 2>/dev/null | grep '127.0.0.1:8899' \
+           | head -n 1 | awk '{print $NF}' | cut -d/ -f1)
+    case "$HPID" in ''|*[!0-9]*) HPID="" ;; esac
+    if alive_as "$HPID" "cammirror/www"; then
+        echo "httpd already listening" >> $LOG
+    else
+        [ -n "$HPID" ] && kill $HPID 2>/dev/null && echo "stale httpd $HPID killed" >> $LOG
         setsid $BB httpd -p 127.0.0.1:8899 -h $BASE/www \
             < /dev/null > /dev/null 2>&1 &
         echo "httpd started" >> $LOG
-    else
-        echo "httpd already listening" >> $LOG
     fi
 else
     echo "WARN: no busybox, GUI unavailable" >> $LOG
 fi
 
 # ---------- 5. 起守护进程 ----------
+# 只看 /proc/$DPID 存在不够：重启后 pid 会被复用，旧 daemon.pid 里的号
+# 可能已属于别的进程，导致守护永远起不来。必须核对 cmdline。
 DPID=$(cat $BASE/daemon.pid 2>/dev/null)
-if [ -z "$DPID" ] || [ ! -d /proc/$DPID ]; then
+DPID_OK=no
+alive_as "$DPID" 'cammirror-watch[.]sh' && DPID_OK=yes
+if [ "$DPID_OK" = "no" ]; then
+    [ -n "$DPID" ] && echo "stale daemon.pid=$DPID (pid reused), restarting" >> $LOG
+    rm -f $BASE/daemon.pid
     if [ -x "$BASE/bin/cammirror-watch.sh" ]; then
         setsid $BASE/bin/cammirror-watch.sh < /dev/null > /dev/null 2>&1 &
         echo "daemon started" >> $LOG
