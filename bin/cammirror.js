@@ -164,7 +164,12 @@ function installNoMirrorSave() {
             m.implementation = function (key) {
                 var r = m.apply(this, arguments);
                 try {
-                    if (String(key).toLowerCase().indexOf('mirrorstorage') >= 0) {
+                    if (String(key).toLowerCase().indexOf('mirrorstorage') >= 0
+                        && r !== null
+                        && r.getClass().getName() === 'java.lang.Boolean') {
+                        /* 只改 Boolean 那条读取路径。相机里还有把同一 key
+                           当 String 读的埋点（PortraitContext/TrackProcessor），
+                           一律返回 Boolean 会 ClassCastException 崩溃。 */
                         noMirrorHits++;
                         return JBool.$new(false);
                     }

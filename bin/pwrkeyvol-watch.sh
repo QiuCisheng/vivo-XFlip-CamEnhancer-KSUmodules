@@ -6,6 +6,14 @@
 B=/data/local/cammirror
 
 while true; do
+    # 每次拉起前解析 pmic_pwrkey 的实际节点（重启后 eventN 会变）
+    for n in /sys/class/input/event*/device/name; do
+        [ -f "$n" ] || continue
+        if [ "$(cat "$n" 2>/dev/null)" = "pmic_pwrkey" ]; then
+            ln -sf "/dev/input/$(basename "$(dirname "$(dirname "$n")")")" /dev/input/pwrkey 2>/dev/null
+            break
+        fi
+    done
     "$B/bin/pwrkeyvol" -c "$B/pwrkeyvol.conf" -s "$B/fakesky" -l "$B/pwrkeyvol.log"
     rc=$?
     [ "$rc" -eq 2 ] && exit 0

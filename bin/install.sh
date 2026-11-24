@@ -7,7 +7,7 @@
 
 MODDIR=/data/adb/modules/cammirror
 BASE=/data/local/cammirror
-PAYLOAD_VER=27      # 每次更新载荷内容都要 +1，否则已装设备不会刷新
+PAYLOAD_VER=33      # 每次更新载荷内容都要 +1，否则已装设备不会刷新
 LOG=$BASE/install.log
 
 # ---------- 安全护栏：路径必须是预期值 ----------
@@ -95,6 +95,7 @@ chmod 644 $BASE/portraitfix 2>/dev/null
 chmod 644 $BASE/tune 2>/dev/null
 
 # 虚假之天：相机前台时把电源键变成音量键
+# VOL=down：映射到音量减（相机里音量键=快门）。
 if [ ! -f $BASE/pwrkeyvol.conf ]; then
     printf 'VOL=down\nPKG=com.android.camera\nPKG=com.vivo.alphacamera\nPKG=net.sourceforge.opencamera\nPKG=com.android.cameraextensions\n' > $BASE/pwrkeyvol.conf
 fi
@@ -138,9 +139,25 @@ else
     echo "daemon already running pid=$DPID" >> $LOG
 fi
 
+
+# 电源键设备节点：重启后 eventN 的编号会变（曾经 event2，后来变成 event1），
+# 所以二进制里不再写死路径，统一用 /dev/input/pwrkey 这个软链，这里按设备名解析。
+ensure_pwrkey_node() {
+    for n in /sys/class/input/event*/device/name; do
+        [ -f "$n" ] || continue
+        if [ "$(cat "$n" 2>/dev/null)" = "pmic_pwrkey" ]; then
+            dev="/dev/input/$(basename "$(dirname "$(dirname "$n")")")"
+            ln -sf "$dev" /dev/input/pwrkey 2>/dev/null
+            return 0
+        fi
+    done
+    return 1
+}
+
 # ---------- 6. 起「虚假之天」（电源键→音量键） ----------
 # 单实例由程序自身的 flock 保护；这里只负责"没在跑就拉起来"
 if [ -x "$BASE/bin/pwrkeyvol-watch.sh" ]; then
+    ensure_pwrkey_node || echo "WARN: pmic_pwrkey not found, 虚假之天 will not work" >> $LOG
     if ! pgrep -f "pwrkeyvol-watch[.]sh" > /dev/null 2>&1; then
         setsid $BASE/bin/pwrkeyvol-watch.sh < /dev/null > /dev/null 2>&1 &
         echo "pwrkeyvol started" >> $LOG
